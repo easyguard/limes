@@ -12,18 +12,18 @@ pub struct Zone {
 	pub input: Chain,
 	pub output: Chain,
 	pub forward: Vec<ForwardItem>,
-	pub items: Items
+	pub items: Items,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Chain {
-	pub ports: Option<Vec<PortRule>>
+	pub ports: Option<Vec<PortRule>>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ForwardItem {
 	pub dest: String,
-	pub ports: Vec<PortRule>
+	pub ports: Vec<PortRule>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -36,7 +36,7 @@ pub struct PortRule {
 
 #[derive(Serialize, Deserialize)]
 pub struct Items {
-	pub interfaces: Vec<String>
+	pub interfaces: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -48,7 +48,7 @@ pub struct Forward {
 	pub protocol: String,
 }
 
-pub fn readRuleset(file: &str) -> Result<Ruleset, std::io::Error> {
+pub fn read_ruleset(file: &str) -> Result<Ruleset, std::io::Error> {
 	let ruleset = std::fs::read_to_string(file)?;
 	Ok(serde_json::from_str(&ruleset)?)
 }
