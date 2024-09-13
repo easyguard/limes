@@ -3,6 +3,7 @@ mod nftutils;
 
 use std::str::FromStr;
 
+use clap::{crate_name, Parser, Subcommand};
 use config::Ruleset;
 use ipnet::IpNet;
 use nftables::{batch::Batch, expr, helper, schema, stmt, types};
@@ -14,22 +15,52 @@ const FILTER_FORWARD_CHAIN_NAME: &str = "forward";
 const NAT_TABLE_FAMILY: types::NfFamily = types::NfFamily::INet;
 const NAT_TABLE_NAME: &str = "nat";
 
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+	#[arg(short, long)]
+	verbose: bool,
+
+	/// The ruleset file to apply
+	#[arg(short, long, default_value_t = String::from("/etc/config/firewall.json"))]
+	ruleset: String,
+
+	#[command(subcommand)]
+	command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+	/// Apply the ruleset to the system firewall
+	Apply {},
+}
+
 fn main() {
-	let config = config::read_ruleset("/root/firewall.json")
+	let args: Args = Args::parse();
+
+	match &args.command {
+		Commands::Apply {} => apply_cmd(&args),
+	}
+}
+
+fn apply_cmd(args: &Args) {
+	let config = config::read_ruleset(&args.ruleset)
 		.expect("Failed to read ruleset! Is it formatted correctly?");
-	let ruleset = generate_ruleset(&config);
+	let ruleset = generate_ruleset(&config, args);
 	helper::apply_ruleset(&ruleset, None, None).unwrap();
 	// let nftables = serde_json::to_string(&ruleset).expect("failed to serialize Nftables struct");
 	// println!("{}", nftables);
+
+	println!("[{}] Done!", crate_name!())
 }
 
-fn generate_ruleset(config: &Ruleset) -> schema::Nftables {
+fn generate_ruleset(config: &Ruleset, args: &Args) -> schema::Nftables {
 	let mut batch = Batch::new();
 	// flush command
 	batch.add_cmd(schema::NfCmd::Flush(schema::FlushObject::Ruleset(None)));
 
-	generate_filter_table(&mut batch, config);
-	generate_nat_table(&mut batch);
+	generate_filter_table(&mut batch, config, args);
+	generate_nat_table(&mut batch, config, args);
 
 	batch.to_nftables()
 }
@@ -38,17 +69,17 @@ fn generate_ruleset(config: &Ruleset) -> schema::Nftables {
 // INET FILTER TABLE
 // =================
 
-fn generate_filter_table(batch: &mut Batch, config: &Ruleset) {
+fn generate_filter_table(batch: &mut Batch, config: &Ruleset, args: &Args) {
 	batch.add(schema::NfListObject::Table(schema::Table::new(
 		FILTER_TABLE_FAMILY,
 		FILTER_TABLE_NAME.to_string(),
 	)));
 
-	generate_filter_input_chain(batch, config);
-	generate_filter_forward_chain(batch, config);
+	generate_filter_input_chain(batch, config, args);
+	generate_filter_forward_chain(batch, config, args);
 }
 
-fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset) {
+fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset, args: &Args) {
 	batch.add(schema::NfListObject::Chain(schema::Chain::new(
 		FILTER_TABLE_FAMILY,
 		FILTER_TABLE_NAME.to_string(),
@@ -154,7 +185,7 @@ fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset) {
 		if zone.input.ports.is_none() {
 			continue;
 		}
-		println!("[filter input] Generating chain for {} zone", zone.name);
+		if args.verbose { println!("[filter input] Generating chain for {} zone", zone.name); }
 		batch.add(schema::NfListObject::Chain(schema::Chain::new(
 			FILTER_TABLE_FAMILY,
 			FILTER_TABLE_NAME.to_string(),
@@ -171,7 +202,7 @@ fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset) {
 			.iter()
 			.map(|interface| expr::SetItem::Element(expr::Expression::String(interface.clone())))
 			.collect();
-		println!("[filter input] Interfaces: {:?}", ifs);
+		if args.verbose { println!("[filter input] Interfaces: {:?}", ifs); }
 		batch.add(schema::NfListObject::Rule(schema::Rule::new(
 			FILTER_TABLE_FAMILY,
 			FILTER_TABLE_NAME.to_string(),
@@ -197,12 +228,13 @@ fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset) {
 				FILTER_TABLE_FAMILY,
 				FILTER_TABLE_NAME.to_string(),
 				format!("input_{}", zone.name),
+				args
 			);
 		}
 	}
 }
 
-fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset) {
+fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset, args: &Args) {
 	batch.add(schema::NfListObject::Chain(schema::Chain::new(
 		FILTER_TABLE_FAMILY,
 		FILTER_TABLE_NAME.to_string(),
@@ -292,7 +324,7 @@ fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset) {
 		if zone.forward.is_empty() {
 			continue;
 		}
-		println!("[filter forward] Generating chains for {} zone", zone.name);
+		if args.verbose { println!("[filter forward] Generating chains for {} zone", zone.name); }
 		for subzone in &zone.forward {
 			// subzone.dest is just the name of the destination zone, we need to get the actual interface of the zone
 			let dest_zone = config
@@ -319,7 +351,7 @@ fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset) {
 					expr::SetItem::Element(expr::Expression::String(interface.clone()))
 				})
 				.collect();
-			println!("[filter forward] Interfaces: {:?}", ifs);
+			if args.verbose { println!("[filter forward] Interfaces: {:?}", ifs); }
 			batch.add(schema::NfListObject::Rule(schema::Rule::new(
 				FILTER_TABLE_FAMILY,
 				FILTER_TABLE_NAME.to_string(),
@@ -352,6 +384,7 @@ fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset) {
 					FILTER_TABLE_FAMILY,
 					FILTER_TABLE_NAME.to_string(),
 					format!("forward_{}_{}", zone.name, subzone.dest),
+					args
 				);
 			}
 		}
@@ -364,6 +397,7 @@ fn add_rule(
 	table_family: types::NfFamily,
 	table_name: String,
 	chain: String,
+	args: &Args
 ) {
 	let mut expr: Vec<stmt::Statement> = Vec::new();
 	if rule.protocol == "icmp" {
@@ -372,6 +406,7 @@ fn add_rule(
 		if rule.limit.is_some() {
 			panic!("Limit not supported yet!");
 		}
+		if args.verbose { println!("[add_rule] Adding rule: {}/{}", rule.port.unwrap(), rule.protocol); }
 		expr.push(stmt::Statement::Match(stmt::Match {
 			left: expr::Expression::Named(expr::NamedExpression::Meta(expr::Meta {
 				key: expr::MetaKey::L4proto,
@@ -403,17 +438,17 @@ fn add_rule(
 // NAT TABLE
 // =========
 
-fn generate_nat_table(batch: &mut Batch) {
+fn generate_nat_table(batch: &mut Batch, config: &Ruleset, args: &Args) {
 	batch.add(schema::NfListObject::Table(schema::Table::new(
 		NAT_TABLE_FAMILY,
 		NAT_TABLE_NAME.to_string(),
 	)));
 
-	generate_nat_prerouting_chain(batch);
-	generate_nat_postrouting_chain(batch);
+	generate_nat_prerouting_chain(batch, config, args);
+	generate_nat_postrouting_chain(batch, config, args);
 }
 
-fn generate_nat_prerouting_chain(batch: &mut Batch) {
+fn generate_nat_prerouting_chain(batch: &mut Batch, _config: &Ruleset, _args: &Args) {
 	batch.add(schema::NfListObject::Chain(schema::Chain::new(
 		NAT_TABLE_FAMILY,
 		NAT_TABLE_NAME.to_string(),
@@ -426,7 +461,7 @@ fn generate_nat_prerouting_chain(batch: &mut Batch) {
 	)));
 }
 
-fn generate_nat_postrouting_chain(batch: &mut Batch) {
+fn generate_nat_postrouting_chain(batch: &mut Batch, _config: &Ruleset, _args: &Args) {
 	batch.add(schema::NfListObject::Chain(schema::Chain::new(
 		NAT_TABLE_FAMILY,
 		NAT_TABLE_NAME.to_string(),

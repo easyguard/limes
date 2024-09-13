@@ -1,6 +1,5 @@
 use ipnet::IpNet;
 use nftables::{batch::Batch, expr, helper, schema, stmt, types};
-use std::net::IpAddr;
 
 /// Get a statement to match the given IP address.
 /// Field should be either "saddr" or "daddr" for matching source or destination.
