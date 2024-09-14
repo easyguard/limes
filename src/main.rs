@@ -33,6 +33,19 @@ struct Args {
 enum Commands {
 	/// Apply the ruleset to the system firewall
 	Apply {},
+	/// Manage the ruleset
+	Rule {
+		/// The zone to manage
+		zone: String,
+		/// The chain to manage (input, output or the name of the zone to forward to)
+		chain: String,
+		/// The action to perform (add, remove)
+		action: String,
+		/// The protocol to match
+		protocol: String,
+		/// The port to match (or the ICMP type)
+		port: String
+	}
 }
 
 fn main() {
@@ -40,6 +53,13 @@ fn main() {
 
 	match &args.command {
 		Commands::Apply {} => apply_cmd(&args),
+		Commands::Rule {
+			zone,
+			chain,
+			action,
+			protocol,
+			port
+		} => rule_cmd(&args, zone, chain, action, protocol, port),
 	}
 }
 
@@ -52,6 +72,101 @@ fn apply_cmd(args: &Args) {
 	// println!("{}", nftables);
 
 	println!("[{}] Done!", crate_name!())
+}
+
+fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protocol: &String, port: &String) {
+	if action != "add" && action != "remove" {
+		panic!("Invalid action: {}", action);
+	}
+
+	let mut config = config::read_ruleset(&args.ruleset)
+		.expect("Failed to read ruleset! Is it formatted correctly?");
+
+	if action == "add" {
+		if chain == "input" || chain == "output" {
+			if protocol == "icmp" {
+				unimplemented!();
+			}
+			let port = port.parse::<u16>().expect("Invalid port number");
+			let rule = config::PortRule {
+				protocol: protocol.to_string(),
+				port: Some(port),
+				limit: None,
+				r#type: None
+			};
+			if chain == "input" {
+				config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().input.ports.get_or_insert(Vec::new()).push(rule);
+			} else {
+				config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().output.ports.get_or_insert(Vec::new()).push(rule);
+			}
+		} else {
+			let dest = chain;
+			let port = port.parse::<u16>().expect("Invalid port number");
+			let rule = config::PortRule {
+				protocol: protocol.to_string(),
+				port: Some(port),
+				limit: None,
+				r#type: None
+			};
+			// First check if the forward zone exists
+			let forward_zone = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().forward.iter_mut().find(|f| f.dest == dest.to_string());
+			if forward_zone.is_none() {
+				config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().forward.push(config::ForwardItem {
+					dest: dest.to_string(),
+					ports: vec![rule]
+				});
+			} else {
+				forward_zone.unwrap().ports.push(rule);
+			}
+		}
+	} else {
+		if chain == "input" || chain == "output" {
+			if protocol == "icmp" {
+				unimplemented!();
+			}
+			let port = port.parse::<u16>().expect("Invalid port number");
+			let rule = config::PortRule {
+				protocol: protocol.to_string(),
+				port: Some(port),
+				limit: None,
+				r#type: None
+			};
+			if chain == "input" {
+				let ports = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().input.ports.as_mut().unwrap();
+				let index = ports.iter().position(|r| r.port.unwrap() == port).expect("Rule not found");
+				ports.remove(index);
+			} else {
+				let ports = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().output.ports.as_mut().unwrap();
+				let index = ports.iter().position(|r| r.port.unwrap() == port).expect("Rule not found");
+				ports.remove(index);
+			}
+		} else {
+			let dest = chain;
+			let port = port.parse::<u16>().expect("Invalid port number");
+			let rule = config::PortRule {
+				protocol: protocol.to_string(),
+				port: Some(port),
+				limit: None,
+				r#type: None
+			};
+			let forward_zone = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().forward.iter_mut().find(|f| f.dest == dest.to_string());
+			if forward_zone.is_none() {
+				panic!("Forward zone not found");
+			} else {
+				let ports = &mut forward_zone.unwrap().ports;
+				let index = ports.iter().position(|r| r.port.unwrap() == port).expect("Rule not found");
+				ports.remove(index);
+			}
+		}
+	}
+
+	// write the new ruleset back to the file
+	let ruleset = serde_json::to_string_pretty(&config).expect("failed to serialize Ruleset struct");
+	std::fs::write(&args.ruleset, ruleset).expect("failed to write ruleset to file");
+
+	println!("[{}] Done!", crate_name!());
+
+	apply_cmd(args);
 }
 
 fn generate_ruleset(config: &Ruleset, args: &Args) -> schema::Nftables {
