@@ -1,12 +1,13 @@
 mod config;
 mod nftutils;
 
-use std::str::FromStr;
+use std::{net::IpAddr, str::FromStr};
 
 use clap::{crate_name, Parser, Subcommand};
 use config::Ruleset;
 use ipnet::IpNet;
 use nftables::{batch::Batch, expr, helper, schema, stmt, types};
+use nftutils::get_ip_match;
 
 const FILTER_TABLE_FAMILY: types::NfFamily = types::NfFamily::INet;
 const FILTER_TABLE_NAME: &str = "filter";
@@ -34,6 +35,8 @@ enum Commands {
 	/// Apply the ruleset to the system firewall
 	Apply {},
 	/// Manage the ruleset
+	/// Please note that this command is not yet stable and only includes the basics.
+	/// Consider manually editing the ruleset file and using the apply command instead.
 	Rule {
 		/// The zone to manage
 		zone: String,
@@ -92,7 +95,8 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 				protocol: protocol.to_string(),
 				port: Some(port),
 				limit: None,
-				r#type: None
+				r#type: None,
+				ip: None
 			};
 			if chain == "input" {
 				config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().input.ports.get_or_insert(Vec::new()).push(rule);
@@ -106,14 +110,16 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 				protocol: protocol.to_string(),
 				port: Some(port),
 				limit: None,
-				r#type: None
+				r#type: None,
+				ip: None
 			};
 			// First check if the forward zone exists
 			let forward_zone = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().forward.iter_mut().find(|f| f.dest == dest.to_string());
 			if forward_zone.is_none() {
 				config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().forward.push(config::ForwardItem {
 					dest: dest.to_string(),
-					ports: vec![rule]
+					ports: vec![rule],
+					include: None
 				});
 			} else {
 				forward_zone.unwrap().ports.push(rule);
@@ -129,7 +135,8 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 				protocol: protocol.to_string(),
 				port: Some(port),
 				limit: None,
-				r#type: None
+				r#type: None,
+				ip: None
 			};
 			if chain == "input" {
 				let ports = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().input.ports.as_mut().unwrap();
@@ -147,7 +154,8 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 				protocol: protocol.to_string(),
 				port: Some(port),
 				limit: None,
-				r#type: None
+				r#type: None,
+				ip: None
 			};
 			let forward_zone = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().forward.iter_mut().find(|f| f.dest == dest.to_string());
 			if forward_zone.is_none() {
@@ -346,6 +354,26 @@ fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset, args: &Args)
 				args
 			);
 		}
+		if zone.input.include.is_some() {
+			for include in zone.input.include.as_ref().unwrap() {
+				// TODO: Make template folder configurable
+				let template = config::read_template(format!("/etc/config/firewall/{}.json", include).as_str());
+				if template.is_err() {
+					panic!("Failed to read template: {}", include);
+				}
+				let template = template.unwrap();
+				for rule in template {
+					add_rule(
+						&rule,
+						batch,
+						FILTER_TABLE_FAMILY,
+						FILTER_TABLE_NAME.to_string(),
+						format!("input_{}", zone.name),
+						args
+					);
+				}
+			}
+		}
 	}
 }
 
@@ -502,6 +530,26 @@ fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset, args: &Arg
 					args
 				);
 			}
+			if subzone.include.is_some() {
+				for include in subzone.include.as_ref().unwrap() {
+					// TODO: Make template folder configurable
+					let template = config::read_template(format!("/etc/config/firewall/{}.json", include).as_str());
+					if template.is_err() {
+						panic!("Failed to read template: {}", include);
+					}
+					let template = template.unwrap();
+					for rule in template {
+						add_rule(
+							&rule,
+							batch,
+							FILTER_TABLE_FAMILY,
+							FILTER_TABLE_NAME.to_string(),
+							format!("forward_{}_{}", zone.name, subzone.dest),
+							args
+						);
+					}
+				}
+			}
 		}
 	}
 }
@@ -522,6 +570,9 @@ fn add_rule(
 			panic!("Limit not supported yet!");
 		}
 		if args.verbose { println!("[add_rule] Adding rule: {}/{}", rule.port.unwrap(), rule.protocol); }
+		if rule.ip.is_some() {
+			expr.push(get_ip_match(&IpAddr::from_str(rule.ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ))
+		}
 		expr.push(stmt::Statement::Match(stmt::Match {
 			left: expr::Expression::Named(expr::NamedExpression::Meta(expr::Meta {
 				key: expr::MetaKey::L4proto,
