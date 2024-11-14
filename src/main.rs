@@ -564,7 +564,31 @@ fn add_rule(
 ) {
 	let mut expr: Vec<stmt::Statement> = Vec::new();
 	if rule.protocol == "icmp" {
-		panic!("ICMP not supported yet!");
+		if rule.limit.is_some() {
+			panic!("Limit not supported yet!");
+		}
+		if args.verbose { println!("[add_rule] Adding rule: {}/{}", rule.r#type.as_ref().unwrap(), rule.protocol); }
+		if rule.ip.is_some() {
+			expr.push(get_ip_match(&IpAddr::from_str(rule.ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ))
+		}
+		expr.push(stmt::Statement::Match(stmt::Match {
+			left: expr::Expression::Named(expr::NamedExpression::Meta(expr::Meta {
+				key: expr::MetaKey::L4proto,
+			})),
+			right: expr::Expression::String(rule.protocol.clone()),
+			op: stmt::Operator::EQ,
+		}));
+		expr.push(stmt::Statement::Match(stmt::Match {
+			left: expr::Expression::Named(expr::NamedExpression::Payload(
+				expr::Payload::PayloadField(expr::PayloadField {
+					protocol: "icmp".to_string(),
+					field: "type".to_string(),
+				}),
+			)),
+			right: expr::Expression::String(rule.r#type.as_ref().unwrap().to_string()),
+			op: stmt::Operator::EQ,
+		}));
+		expr.push(stmt::Statement::Accept(None));
 	} else {
 		if rule.limit.is_some() {
 			panic!("Limit not supported yet!");
