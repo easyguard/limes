@@ -671,7 +671,7 @@ fn generate_nat_postrouting_chain(batch: &mut Batch, _config: &Ruleset, _args: &
 				left: expr::Expression::Named(expr::NamedExpression::Meta(expr::Meta {
 					key: expr::MetaKey::Oifname,
 				})),
-				right: expr::Expression::String("eth0".to_string()),
+				right: expr::Expression::String("wan".to_string()),
 				op: stmt::Operator::EQ,
 			}),
 			stmt::Statement::Masquerade(None),
