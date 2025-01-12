@@ -87,17 +87,21 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 
 	if action == "add" {
 		if chain == "input" || chain == "output" {
-			if protocol == "icmp" {
-				unimplemented!();
-			}
-			let port = port.parse::<u16>().expect("Invalid port number");
-			let rule = config::PortRule {
+			let mut rule = config::PortRule {
 				protocol: protocol.to_string(),
-				port: Some(port),
+				port: None,
 				limit: None,
 				r#type: None,
 				ip: None
 			};
+			if protocol == "icmp" {
+				rule.r#type = Some(port.to_string());
+			} else if protocol == "tcp" || protocol == "udp" {
+				let port = port.parse::<u16>().expect("Invalid port number");
+				rule.port = Some(port);
+			} else {
+				unimplemented!("Unknown protocol: {}", protocol);
+			}
 			if chain == "input" {
 				config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().input.ports.get_or_insert(Vec::new()).push(rule);
 			} else {
@@ -105,14 +109,23 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 			}
 		} else {
 			let dest = chain;
-			let port = port.parse::<u16>().expect("Invalid port number");
-			let rule = config::PortRule {
+			let mut rule = config::PortRule {
 				protocol: protocol.to_string(),
-				port: Some(port),
+				port: None,
 				limit: None,
 				r#type: None,
 				ip: None
 			};
+
+			if protocol == "icmp" {
+				rule.r#type = Some(port.to_string());
+			} else if protocol == "tcp" || protocol == "udp" {
+				let port = port.parse::<u16>().expect("Invalid port number");
+				rule.port = Some(port);
+			} else {
+				unimplemented!("Unknown protocol: {}", protocol);
+			}
+
 			// First check if the forward zone exists
 			let forward_zone = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().forward.iter_mut().find(|f| f.dest == dest.to_string());
 			if forward_zone.is_none() {
@@ -127,43 +140,55 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 		}
 	} else {
 		if chain == "input" || chain == "output" {
-			if protocol == "icmp" {
-				unimplemented!();
-			}
-			let port = port.parse::<u16>().expect("Invalid port number");
-			let rule = config::PortRule {
-				protocol: protocol.to_string(),
-				port: Some(port),
-				limit: None,
-				r#type: None,
-				ip: None
-			};
+			// let rule = config::PortRule {
+			// 	protocol: protocol.to_string(),
+			// 	port: Some(port),
+			// 	limit: None,
+			// 	r#type: None,
+			// 	ip: None
+			// };
 			if chain == "input" {
 				let ports = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().input.ports.as_mut().unwrap();
-				let index = ports.iter().position(|r| r.port.unwrap() == port).expect("Rule not found");
-				ports.remove(index);
+				if protocol == "tcp" || protocol == "udp" {
+					let port = port.parse::<u16>().expect("Invalid port number");
+					let index = ports.iter().position(|r| r.port.unwrap_or(0) == port).expect("Rule not found");
+					ports.remove(index);
+				} else if protocol == "icmp" {
+					let index = ports.iter().position(|r| r.r#type.as_ref().unwrap_or(&"".to_string()) == port).expect("Rule not found");
+					ports.remove(index);
+				} else {
+					unimplemented!("Unknown protocol: {}", protocol);
+				}
 			} else {
 				let ports = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().output.ports.as_mut().unwrap();
-				let index = ports.iter().position(|r| r.port.unwrap() == port).expect("Rule not found");
-				ports.remove(index);
+				if protocol == "tcp" || protocol == "udp" {
+					let port = port.parse::<u16>().expect("Invalid port number");
+					let index = ports.iter().position(|r| r.port.unwrap_or(0) == port).expect("Rule not found");
+					ports.remove(index);
+				} else if protocol == "icmp" {
+					let index = ports.iter().position(|r| r.r#type.as_ref().unwrap_or(&"".to_string()) == port).expect("Rule not found");
+					ports.remove(index);
+				} else {
+					unimplemented!("Unknown protocol: {}", protocol);
+				}
 			}
 		} else {
 			let dest = chain;
-			let port = port.parse::<u16>().expect("Invalid port number");
-			let rule = config::PortRule {
-				protocol: protocol.to_string(),
-				port: Some(port),
-				limit: None,
-				r#type: None,
-				ip: None
-			};
 			let forward_zone = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().forward.iter_mut().find(|f| f.dest == dest.to_string());
 			if forward_zone.is_none() {
 				panic!("Forward zone not found");
 			} else {
 				let ports = &mut forward_zone.unwrap().ports;
-				let index = ports.iter().position(|r| r.port.unwrap() == port).expect("Rule not found");
-				ports.remove(index);
+				if protocol == "tcp" || protocol == "udp" {
+					let port_u16 = port.parse::<u16>().expect("Invalid port number");
+					let index = ports.iter().position(|r| r.port.unwrap_or(0) == port_u16).expect("Rule not found");
+					ports.remove(index);
+				} else if protocol == "icmp" {
+					let index = ports.iter().position(|r| r.r#type.as_ref().unwrap_or(&"".to_string()) == port).expect("Rule not found");
+					ports.remove(index);
+				} else {
+					unimplemented!("Unknown protocol: {}", protocol);
+				}
 			}
 		}
 	}
