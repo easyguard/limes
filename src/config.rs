@@ -31,10 +31,16 @@ pub struct ForwardItem {
 #[derive(Serialize, Deserialize)]
 pub struct PortRule {
 	pub protocol: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub r#type: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub limit: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub port: Option<u16>,
-	pub ip: Option<String>
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub source_ip: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub dest_ip: Option<String>
 }
 
 #[derive(Serialize, Deserialize)]

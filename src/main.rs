@@ -7,7 +7,7 @@ use clap::{crate_name, Parser, Subcommand};
 use config::Ruleset;
 use ipnet::IpNet;
 use nftables::{batch::Batch, expr, helper, schema, stmt, types};
-use nftutils::get_ip_match;
+use nftutils::{get_ip_match, get_subnet_match};
 
 const FILTER_TABLE_FAMILY: types::NfFamily = types::NfFamily::INet;
 const FILTER_TABLE_NAME: &str = "filter";
@@ -92,7 +92,8 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 				port: None,
 				limit: None,
 				r#type: None,
-				ip: None
+				source_ip: None,
+				dest_ip: None
 			};
 			if protocol == "icmp" {
 				rule.r#type = Some(port.to_string());
@@ -114,7 +115,8 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 				port: None,
 				limit: None,
 				r#type: None,
-				ip: None
+				source_ip: None,
+				dest_ip: None
 			};
 
 			if protocol == "icmp" {
@@ -593,8 +595,23 @@ fn add_rule(
 			panic!("Limit not supported yet!");
 		}
 		if args.verbose { println!("[add_rule] Adding rule: {}/{}", rule.r#type.as_ref().unwrap(), rule.protocol); }
-		if rule.ip.is_some() {
-			expr.push(get_ip_match(&IpAddr::from_str(rule.ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ))
+		if rule.source_ip.is_some() {
+			expr.push(
+				if rule.source_ip.as_ref().unwrap().contains("/") {
+					get_subnet_match(&IpNet::from_str(rule.source_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ)
+				} else {
+					get_ip_match(&IpAddr::from_str(rule.source_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ)
+				}
+			);
+		}
+		if rule.dest_ip.is_some() {
+			expr.push(
+				if rule.dest_ip.as_ref().unwrap().contains("/") {
+					get_subnet_match(&IpNet::from_str(rule.dest_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "daddr", stmt::Operator::EQ)
+				} else {
+					get_ip_match(&IpAddr::from_str(rule.dest_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "daddr", stmt::Operator::EQ)
+				}
+			);
 		}
 		expr.push(stmt::Statement::Match(stmt::Match {
 			left: expr::Expression::Named(expr::NamedExpression::Meta(expr::Meta {
@@ -619,8 +636,23 @@ fn add_rule(
 			panic!("Limit not supported yet!");
 		}
 		if args.verbose { println!("[add_rule] Adding rule: {}/{}", rule.port.unwrap(), rule.protocol); }
-		if rule.ip.is_some() {
-			expr.push(get_ip_match(&IpAddr::from_str(rule.ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ))
+		if rule.source_ip.is_some() {
+			expr.push(
+				if rule.source_ip.as_ref().unwrap().contains("/") {
+					get_subnet_match(&IpNet::from_str(rule.source_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ)
+				} else {
+					get_ip_match(&IpAddr::from_str(rule.source_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ)
+				}
+			);
+		}
+		if rule.dest_ip.is_some() {
+			expr.push(
+				if rule.dest_ip.as_ref().unwrap().contains("/") {
+					get_subnet_match(&IpNet::from_str(rule.dest_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "daddr", stmt::Operator::EQ)
+				} else {
+					get_ip_match(&IpAddr::from_str(rule.dest_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "daddr", stmt::Operator::EQ)
+				}
+			);
 		}
 		expr.push(stmt::Statement::Match(stmt::Match {
 			left: expr::Expression::Named(expr::NamedExpression::Meta(expr::Meta {
