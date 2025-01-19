@@ -560,7 +560,7 @@ fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset, args: &Arg
 			if subzone.include.is_some() {
 				for include in subzone.include.as_ref().unwrap() {
 					// TODO: Make template folder configurable
-					let template = config::read_template(format!("/etc/config/firewall/{}.json", include).as_str());
+					let template = config::read_template(format!("/etc/config/firewall/templates/{}.json", include).as_str());
 					if template.is_err() {
 						panic!("Failed to read template: {}", include);
 					}
