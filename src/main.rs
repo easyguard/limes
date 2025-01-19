@@ -67,6 +67,8 @@ fn main() {
 }
 
 fn apply_cmd(args: &Args) {
+	run_hook("pre-apply");
+
 	let config = config::read_ruleset(&args.ruleset)
 		.expect("Failed to read ruleset! Is it formatted correctly?");
 	let ruleset = generate_ruleset(&config, args);
@@ -74,7 +76,9 @@ fn apply_cmd(args: &Args) {
 	// let nftables = serde_json::to_string(&ruleset).expect("failed to serialize Nftables struct");
 	// println!("{}", nftables);
 
-	println!("[{}] Done!", crate_name!())
+	println!("[{}] Done!", crate_name!());
+
+	run_hook("post-apply");
 }
 
 fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protocol: &String, port: &String) {
@@ -202,6 +206,23 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 	println!("[{}] Done!", crate_name!());
 
 	apply_cmd(args);
+}
+
+fn run_hook(hook: &str) {
+	let path = format!("/etc/config/firewall/hooks/{}", hook);
+	let path = path.as_str();
+	// Check if the hook exists
+	if !std::path::Path::new(path).exists() {
+		return;
+	}
+	// Run the hook (the shebang will determine how it's run)
+	let output = std::process::Command::new(path)
+		.output()
+		.expect("Failed to run hook");
+	if !output.status.success() {
+		println!("[{hook}] Hook failed: {}", String::from_utf8_lossy(&output.stderr));
+	}
+	println!("[{hook}] Hook ran successfully");
 }
 
 fn generate_ruleset(config: &Ruleset, args: &Args) -> schema::Nftables {
