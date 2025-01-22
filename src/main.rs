@@ -236,6 +236,24 @@ fn generate_ruleset(config: &Ruleset, args: &Args) -> schema::Nftables {
 	batch.to_nftables()
 }
 
+fn add_log_rule(batch: &mut Batch, prefix: String, table_family: types::NfFamily, table_name: String, chain: String) {
+	batch.add(schema::NfListObject::Rule(schema::Rule::new(
+		table_family,
+		table_name,
+		chain,
+		vec![
+			stmt::Statement::Log(Some(stmt::Log {
+				prefix: Some(prefix),
+				group: None,
+				snaplen: None,
+				queue_threshold: None,
+				level: None,
+				flags: None
+			}))
+		],
+	)));
+}
+
 // =================
 // INET FILTER TABLE
 // =================
@@ -423,6 +441,8 @@ fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset, args: &Args)
 			}
 		}
 	}
+
+	add_log_rule(batch, "[FW-INPUT] ".to_string(), FILTER_TABLE_FAMILY, FILTER_TABLE_NAME.to_string(), FILTER_INPUT_CHAIN_NAME.to_string());
 }
 
 fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset, args: &Args) {
@@ -600,6 +620,8 @@ fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset, args: &Arg
 			}
 		}
 	}
+
+	add_log_rule(batch, "[FW-FORWARD] ".to_string(), FILTER_TABLE_FAMILY, FILTER_TABLE_NAME.to_string(), FILTER_FORWARD_CHAIN_NAME.to_string());
 }
 
 fn add_rule(
