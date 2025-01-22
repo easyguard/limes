@@ -47,8 +47,8 @@ enum Commands {
 		/// The protocol to match
 		protocol: String,
 		/// The port to match (or the ICMP type)
-		port: String
-	}
+		port: String,
+	},
 }
 
 fn main() {
@@ -61,7 +61,7 @@ fn main() {
 			chain,
 			action,
 			protocol,
-			port
+			port,
 		} => rule_cmd(&args, zone, chain, action, protocol, port),
 	}
 }
@@ -81,7 +81,14 @@ fn apply_cmd(args: &Args) {
 	run_hook("post-apply");
 }
 
-fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protocol: &String, port: &String) {
+fn rule_cmd(
+	args: &Args,
+	zone: &String,
+	chain: &String,
+	action: &String,
+	protocol: &String,
+	port: &String,
+) {
 	if action != "add" && action != "remove" {
 		panic!("Invalid action: {}", action);
 	}
@@ -97,7 +104,7 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 				limit: None,
 				r#type: None,
 				source_ip: None,
-				dest_ip: None
+				dest_ip: None,
 			};
 			if protocol == "icmp" {
 				rule.r#type = Some(port.to_string());
@@ -108,9 +115,25 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 				unimplemented!("Unknown protocol: {}", protocol);
 			}
 			if chain == "input" {
-				config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().input.ports.get_or_insert(Vec::new()).push(rule);
+				config
+					.zones
+					.iter_mut()
+					.find(|z| z.name == zone.to_string())
+					.unwrap()
+					.input
+					.ports
+					.get_or_insert(Vec::new())
+					.push(rule);
 			} else {
-				config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().output.ports.get_or_insert(Vec::new()).push(rule);
+				config
+					.zones
+					.iter_mut()
+					.find(|z| z.name == zone.to_string())
+					.unwrap()
+					.output
+					.ports
+					.get_or_insert(Vec::new())
+					.push(rule);
 			}
 		} else {
 			let dest = chain;
@@ -120,7 +143,7 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 				limit: None,
 				r#type: None,
 				source_ip: None,
-				dest_ip: None
+				dest_ip: None,
 			};
 
 			if protocol == "icmp" {
@@ -133,13 +156,26 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 			}
 
 			// First check if the forward zone exists
-			let forward_zone = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().forward.iter_mut().find(|f| f.dest == dest.to_string());
+			let forward_zone = config
+				.zones
+				.iter_mut()
+				.find(|z| z.name == zone.to_string())
+				.unwrap()
+				.forward
+				.iter_mut()
+				.find(|f| f.dest == dest.to_string());
 			if forward_zone.is_none() {
-				config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().forward.push(config::ForwardItem {
-					dest: dest.to_string(),
-					ports: vec![rule],
-					include: None
-				});
+				config
+					.zones
+					.iter_mut()
+					.find(|z| z.name == zone.to_string())
+					.unwrap()
+					.forward
+					.push(config::ForwardItem {
+						dest: dest.to_string(),
+						ports: vec![rule],
+						include: None,
+					});
 			} else {
 				forward_zone.unwrap().ports.push(rule);
 			}
@@ -154,25 +190,53 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 			// 	ip: None
 			// };
 			if chain == "input" {
-				let ports = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().input.ports.as_mut().unwrap();
+				let ports = config
+					.zones
+					.iter_mut()
+					.find(|z| z.name == zone.to_string())
+					.unwrap()
+					.input
+					.ports
+					.as_mut()
+					.unwrap();
 				if protocol == "tcp" || protocol == "udp" {
 					let port = port.parse::<u16>().expect("Invalid port number");
-					let index = ports.iter().position(|r| r.port.unwrap_or(0) == port).expect("Rule not found");
+					let index = ports
+						.iter()
+						.position(|r| r.port.unwrap_or(0) == port)
+						.expect("Rule not found");
 					ports.remove(index);
 				} else if protocol == "icmp" {
-					let index = ports.iter().position(|r| r.r#type.as_ref().unwrap_or(&"".to_string()) == port).expect("Rule not found");
+					let index = ports
+						.iter()
+						.position(|r| r.r#type.as_ref().unwrap_or(&"".to_string()) == port)
+						.expect("Rule not found");
 					ports.remove(index);
 				} else {
 					unimplemented!("Unknown protocol: {}", protocol);
 				}
 			} else {
-				let ports = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().output.ports.as_mut().unwrap();
+				let ports = config
+					.zones
+					.iter_mut()
+					.find(|z| z.name == zone.to_string())
+					.unwrap()
+					.output
+					.ports
+					.as_mut()
+					.unwrap();
 				if protocol == "tcp" || protocol == "udp" {
 					let port = port.parse::<u16>().expect("Invalid port number");
-					let index = ports.iter().position(|r| r.port.unwrap_or(0) == port).expect("Rule not found");
+					let index = ports
+						.iter()
+						.position(|r| r.port.unwrap_or(0) == port)
+						.expect("Rule not found");
 					ports.remove(index);
 				} else if protocol == "icmp" {
-					let index = ports.iter().position(|r| r.r#type.as_ref().unwrap_or(&"".to_string()) == port).expect("Rule not found");
+					let index = ports
+						.iter()
+						.position(|r| r.r#type.as_ref().unwrap_or(&"".to_string()) == port)
+						.expect("Rule not found");
 					ports.remove(index);
 				} else {
 					unimplemented!("Unknown protocol: {}", protocol);
@@ -180,17 +244,30 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 			}
 		} else {
 			let dest = chain;
-			let forward_zone = config.zones.iter_mut().find(|z| z.name == zone.to_string()).unwrap().forward.iter_mut().find(|f| f.dest == dest.to_string());
+			let forward_zone = config
+				.zones
+				.iter_mut()
+				.find(|z| z.name == zone.to_string())
+				.unwrap()
+				.forward
+				.iter_mut()
+				.find(|f| f.dest == dest.to_string());
 			if forward_zone.is_none() {
 				panic!("Forward zone not found");
 			} else {
 				let ports = &mut forward_zone.unwrap().ports;
 				if protocol == "tcp" || protocol == "udp" {
 					let port_u16 = port.parse::<u16>().expect("Invalid port number");
-					let index = ports.iter().position(|r| r.port.unwrap_or(0) == port_u16).expect("Rule not found");
+					let index = ports
+						.iter()
+						.position(|r| r.port.unwrap_or(0) == port_u16)
+						.expect("Rule not found");
 					ports.remove(index);
 				} else if protocol == "icmp" {
-					let index = ports.iter().position(|r| r.r#type.as_ref().unwrap_or(&"".to_string()) == port).expect("Rule not found");
+					let index = ports
+						.iter()
+						.position(|r| r.r#type.as_ref().unwrap_or(&"".to_string()) == port)
+						.expect("Rule not found");
 					ports.remove(index);
 				} else {
 					unimplemented!("Unknown protocol: {}", protocol);
@@ -200,7 +277,8 @@ fn rule_cmd(args: &Args, zone: &String, chain: &String, action: &String, protoco
 	}
 
 	// write the new ruleset back to the file
-	let ruleset = serde_json::to_string_pretty(&config).expect("failed to serialize Ruleset struct");
+	let ruleset =
+		serde_json::to_string_pretty(&config).expect("failed to serialize Ruleset struct");
 	std::fs::write(&args.ruleset, ruleset).expect("failed to write ruleset to file");
 
 	println!("[{}] Done!", crate_name!());
@@ -220,7 +298,10 @@ fn run_hook(hook: &str) {
 		.output()
 		.expect("Failed to run hook");
 	if !output.status.success() {
-		println!("[{hook}] Hook failed: {}", String::from_utf8_lossy(&output.stderr));
+		println!(
+			"[{hook}] Hook failed: {}",
+			String::from_utf8_lossy(&output.stderr)
+		);
 	}
 	println!("[{hook}] Hook ran successfully");
 }
@@ -236,21 +317,25 @@ fn generate_ruleset(config: &Ruleset, args: &Args) -> schema::Nftables {
 	batch.to_nftables()
 }
 
-fn add_log_rule(batch: &mut Batch, prefix: String, table_family: types::NfFamily, table_name: String, chain: String) {
+fn add_log_rule(
+	batch: &mut Batch,
+	prefix: String,
+	table_family: types::NfFamily,
+	table_name: String,
+	chain: String,
+) {
 	batch.add(schema::NfListObject::Rule(schema::Rule::new(
 		table_family,
 		table_name,
 		chain,
-		vec![
-			stmt::Statement::Log(Some(stmt::Log {
-				prefix: Some(prefix),
-				group: None,
-				snaplen: None,
-				queue_threshold: None,
-				level: None,
-				flags: None
-			}))
-		],
+		vec![stmt::Statement::Log(Some(stmt::Log {
+			prefix: Some(prefix),
+			group: None,
+			snaplen: None,
+			queue_threshold: None,
+			level: None,
+			flags: None,
+		}))],
 	)));
 }
 
@@ -374,7 +459,9 @@ fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset, args: &Args)
 		if zone.input.ports.is_none() {
 			continue;
 		}
-		if args.verbose { println!("[filter input] Generating chain for {} zone", zone.name); }
+		if args.verbose {
+			println!("[filter input] Generating chain for {} zone", zone.name);
+		}
 		batch.add(schema::NfListObject::Chain(schema::Chain::new(
 			FILTER_TABLE_FAMILY,
 			FILTER_TABLE_NAME.to_string(),
@@ -391,7 +478,9 @@ fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset, args: &Args)
 			.iter()
 			.map(|interface| expr::SetItem::Element(expr::Expression::String(interface.clone())))
 			.collect();
-		if args.verbose { println!("[filter input] Interfaces: {:?}", ifs); }
+		if args.verbose {
+			println!("[filter input] Interfaces: {:?}", ifs);
+		}
 		batch.add(schema::NfListObject::Rule(schema::Rule::new(
 			FILTER_TABLE_FAMILY,
 			FILTER_TABLE_NAME.to_string(),
@@ -417,13 +506,15 @@ fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset, args: &Args)
 				FILTER_TABLE_FAMILY,
 				FILTER_TABLE_NAME.to_string(),
 				format!("input_{}", zone.name),
-				args
+				args,
 			);
 		}
 		if zone.input.include.is_some() {
 			for include in zone.input.include.as_ref().unwrap() {
 				// TODO: Make template folder configurable
-				let template = config::read_template(format!("/etc/config/firewall/{}.json", include).as_str());
+				let template = config::read_template(
+					format!("/etc/config/firewall/{}.json", include).as_str(),
+				);
 				if template.is_err() {
 					panic!("Failed to read template: {}", include);
 				}
@@ -435,14 +526,20 @@ fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset, args: &Args)
 						FILTER_TABLE_FAMILY,
 						FILTER_TABLE_NAME.to_string(),
 						format!("input_{}", zone.name),
-						args
+						args,
 					);
 				}
 			}
 		}
 	}
 
-	add_log_rule(batch, "[FW-INPUT] ".to_string(), FILTER_TABLE_FAMILY, FILTER_TABLE_NAME.to_string(), FILTER_INPUT_CHAIN_NAME.to_string());
+	add_log_rule(
+		batch,
+		"[FW-INPUT] ".to_string(),
+		FILTER_TABLE_FAMILY,
+		FILTER_TABLE_NAME.to_string(),
+		FILTER_INPUT_CHAIN_NAME.to_string(),
+	);
 }
 
 fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset, args: &Args) {
@@ -535,7 +632,9 @@ fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset, args: &Arg
 		if zone.forward.is_empty() {
 			continue;
 		}
-		if args.verbose { println!("[filter forward] Generating chains for {} zone", zone.name); }
+		if args.verbose {
+			println!("[filter forward] Generating chains for {} zone", zone.name);
+		}
 		for subzone in &zone.forward {
 			// subzone.dest is just the name of the destination zone, we need to get the actual interface of the zone
 			let dest_zone = config
@@ -562,7 +661,9 @@ fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset, args: &Arg
 					expr::SetItem::Element(expr::Expression::String(interface.clone()))
 				})
 				.collect();
-			if args.verbose { println!("[filter forward] Interfaces: {:?}", ifs); }
+			if args.verbose {
+				println!("[filter forward] Interfaces: {:?}", ifs);
+			}
 			batch.add(schema::NfListObject::Rule(schema::Rule::new(
 				FILTER_TABLE_FAMILY,
 				FILTER_TABLE_NAME.to_string(),
@@ -595,13 +696,15 @@ fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset, args: &Arg
 					FILTER_TABLE_FAMILY,
 					FILTER_TABLE_NAME.to_string(),
 					format!("forward_{}_{}", zone.name, subzone.dest),
-					args
+					args,
 				);
 			}
 			if subzone.include.is_some() {
 				for include in subzone.include.as_ref().unwrap() {
 					// TODO: Make template folder configurable
-					let template = config::read_template(format!("/etc/config/firewall/templates/{}.json", include).as_str());
+					let template = config::read_template(
+						format!("/etc/config/firewall/templates/{}.json", include).as_str(),
+					);
 					if template.is_err() {
 						panic!("Failed to read template: {}", include);
 					}
@@ -613,7 +716,7 @@ fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset, args: &Arg
 							FILTER_TABLE_FAMILY,
 							FILTER_TABLE_NAME.to_string(),
 							format!("forward_{}_{}", zone.name, subzone.dest),
-							args
+							args,
 						);
 					}
 				}
@@ -621,7 +724,13 @@ fn generate_filter_forward_chain(batch: &mut Batch, config: &Ruleset, args: &Arg
 		}
 	}
 
-	add_log_rule(batch, "[FW-FORWARD] ".to_string(), FILTER_TABLE_FAMILY, FILTER_TABLE_NAME.to_string(), FILTER_FORWARD_CHAIN_NAME.to_string());
+	add_log_rule(
+		batch,
+		"[FW-FORWARD] ".to_string(),
+		FILTER_TABLE_FAMILY,
+		FILTER_TABLE_NAME.to_string(),
+		FILTER_FORWARD_CHAIN_NAME.to_string(),
+	);
 }
 
 fn add_rule(
@@ -630,31 +739,53 @@ fn add_rule(
 	table_family: types::NfFamily,
 	table_name: String,
 	chain: String,
-	args: &Args
+	args: &Args,
 ) {
 	let mut expr: Vec<stmt::Statement> = Vec::new();
 	if rule.protocol == "icmp" {
 		if rule.limit.is_some() {
 			panic!("Limit not supported yet!");
 		}
-		if args.verbose { println!("[add_rule] Adding rule: {}/{}", rule.r#type.as_ref().unwrap(), rule.protocol); }
-		if rule.source_ip.is_some() {
-			expr.push(
-				if rule.source_ip.as_ref().unwrap().contains("/") {
-					get_subnet_match(&IpNet::from_str(rule.source_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ)
-				} else {
-					get_ip_match(&IpAddr::from_str(rule.source_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ)
-				}
+		if args.verbose {
+			println!(
+				"[add_rule] Adding rule: {}/{}",
+				rule.r#type.as_ref().unwrap(),
+				rule.protocol
 			);
 		}
+		if rule.source_ip.is_some() {
+			expr.push(if rule.source_ip.as_ref().unwrap().contains("/") {
+				get_subnet_match(
+					&IpNet::from_str(rule.source_ip.as_ref().unwrap().as_str())
+						.expect("Error parsing IP address"),
+					"saddr",
+					stmt::Operator::EQ,
+				)
+			} else {
+				get_ip_match(
+					&IpAddr::from_str(rule.source_ip.as_ref().unwrap().as_str())
+						.expect("Error parsing IP address"),
+					"saddr",
+					stmt::Operator::EQ,
+				)
+			});
+		}
 		if rule.dest_ip.is_some() {
-			expr.push(
-				if rule.dest_ip.as_ref().unwrap().contains("/") {
-					get_subnet_match(&IpNet::from_str(rule.dest_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "daddr", stmt::Operator::EQ)
-				} else {
-					get_ip_match(&IpAddr::from_str(rule.dest_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "daddr", stmt::Operator::EQ)
-				}
-			);
+			expr.push(if rule.dest_ip.as_ref().unwrap().contains("/") {
+				get_subnet_match(
+					&IpNet::from_str(rule.dest_ip.as_ref().unwrap().as_str())
+						.expect("Error parsing IP address"),
+					"daddr",
+					stmt::Operator::EQ,
+				)
+			} else {
+				get_ip_match(
+					&IpAddr::from_str(rule.dest_ip.as_ref().unwrap().as_str())
+						.expect("Error parsing IP address"),
+					"daddr",
+					stmt::Operator::EQ,
+				)
+			});
 		}
 		expr.push(stmt::Statement::Match(stmt::Match {
 			left: expr::Expression::Named(expr::NamedExpression::Meta(expr::Meta {
@@ -678,24 +809,46 @@ fn add_rule(
 		if rule.limit.is_some() {
 			panic!("Limit not supported yet!");
 		}
-		if args.verbose { println!("[add_rule] Adding rule: {}/{}", rule.port.unwrap(), rule.protocol); }
-		if rule.source_ip.is_some() {
-			expr.push(
-				if rule.source_ip.as_ref().unwrap().contains("/") {
-					get_subnet_match(&IpNet::from_str(rule.source_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ)
-				} else {
-					get_ip_match(&IpAddr::from_str(rule.source_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "saddr", stmt::Operator::EQ)
-				}
+		if args.verbose {
+			println!(
+				"[add_rule] Adding rule: {}/{}",
+				rule.port.unwrap(),
+				rule.protocol
 			);
 		}
+		if rule.source_ip.is_some() {
+			expr.push(if rule.source_ip.as_ref().unwrap().contains("/") {
+				get_subnet_match(
+					&IpNet::from_str(rule.source_ip.as_ref().unwrap().as_str())
+						.expect("Error parsing IP address"),
+					"saddr",
+					stmt::Operator::EQ,
+				)
+			} else {
+				get_ip_match(
+					&IpAddr::from_str(rule.source_ip.as_ref().unwrap().as_str())
+						.expect("Error parsing IP address"),
+					"saddr",
+					stmt::Operator::EQ,
+				)
+			});
+		}
 		if rule.dest_ip.is_some() {
-			expr.push(
-				if rule.dest_ip.as_ref().unwrap().contains("/") {
-					get_subnet_match(&IpNet::from_str(rule.dest_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "daddr", stmt::Operator::EQ)
-				} else {
-					get_ip_match(&IpAddr::from_str(rule.dest_ip.as_ref().unwrap().as_str()).expect("Error parsing IP address"), "daddr", stmt::Operator::EQ)
-				}
-			);
+			expr.push(if rule.dest_ip.as_ref().unwrap().contains("/") {
+				get_subnet_match(
+					&IpNet::from_str(rule.dest_ip.as_ref().unwrap().as_str())
+						.expect("Error parsing IP address"),
+					"daddr",
+					stmt::Operator::EQ,
+				)
+			} else {
+				get_ip_match(
+					&IpAddr::from_str(rule.dest_ip.as_ref().unwrap().as_str())
+						.expect("Error parsing IP address"),
+					"daddr",
+					stmt::Operator::EQ,
+				)
+			});
 		}
 		expr.push(stmt::Statement::Match(stmt::Match {
 			left: expr::Expression::Named(expr::NamedExpression::Meta(expr::Meta {

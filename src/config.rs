@@ -40,7 +40,7 @@ pub struct PortRule {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub source_ip: Option<String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub dest_ip: Option<String>
+	pub dest_ip: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
