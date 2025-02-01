@@ -513,7 +513,7 @@ fn generate_filter_input_chain(batch: &mut Batch, config: &Ruleset, args: &Args)
 			for include in zone.input.include.as_ref().unwrap() {
 				// TODO: Make template folder configurable
 				let template = config::read_template(
-					format!("/etc/config/firewall/{}.json", include).as_str(),
+					format!("/etc/config/firewall/templates/{}.json", include).as_str(),
 				);
 				if template.is_err() {
 					panic!("Failed to read template: {}", include);
