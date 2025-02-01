@@ -42,13 +42,24 @@ enum Commands {
 		zone: String,
 		/// The chain to manage (input, output or the name of the zone to forward to)
 		chain: String,
-		/// The action to perform (add, remove)
+		/// The action to perform (add, remove, replace)
 		action: String,
 		/// The protocol to match
 		protocol: String,
 		/// The port to match (or the ICMP type)
 		port: String,
 	},
+	/// Manage the includes in the ruleset
+	Includes {
+		// The zone to manage
+		zone: String,
+		// The chain to manage (input, output or the name of the zone to forward to)
+		chain: String,
+		// The action to perform (add, remove)
+		action: String,
+		// The include to manage
+		include: String,
+	}
 }
 
 fn main() {
@@ -63,6 +74,12 @@ fn main() {
 			protocol,
 			port,
 		} => rule_cmd(&args, zone, chain, action, protocol, port),
+		Commands::Includes {
+			zone,
+			chain,
+			action,
+			include
+		} => includes_cmd(&args, zone, chain, action, include),
 	}
 }
 
@@ -272,6 +289,99 @@ fn rule_cmd(
 				} else {
 					unimplemented!("Unknown protocol: {}", protocol);
 				}
+			}
+		}
+	}
+
+	// write the new ruleset back to the file
+	let ruleset =
+		serde_json::to_string_pretty(&config).expect("failed to serialize Ruleset struct");
+	std::fs::write(&args.ruleset, ruleset).expect("failed to write ruleset to file");
+
+	println!("[{}] Done!", crate_name!());
+
+	apply_cmd(args);
+}
+
+fn includes_cmd(args: &Args, zone: &String, chain: &String, action: &String, include: &String) {
+	// Valid actions: add, remove, replace
+	if action != "add" && action != "remove" && action != "replace" {
+		panic!("Invalid action: {}", action);
+	}
+
+	let mut config = config::read_ruleset(&args.ruleset)
+		.expect("Failed to read ruleset! Is it formatted correctly?");
+	let zone = config
+		.zones
+		.iter_mut()
+		.find(|z| z.name == zone.to_string())
+		.expect("Zone not found");
+
+	if chain == "input" {
+		if action == "add" {
+			zone.input.include.get_or_insert(Vec::new()).push(include.to_string());
+		} else if action == "remove" {
+			let index = zone
+				.input
+				.include
+				.as_ref()
+				.unwrap()
+				.iter()
+				.position(|i| i == include)
+				.expect("Include not found");
+			zone.input.include.as_mut().unwrap().remove(index);
+		} else if action == "replace" {
+			if include.contains("[") {
+				let include: Vec<String> = serde_json::from_str(include).expect("Invalid JSON array");
+				zone.input.include = Some(include);
+			} else {
+				zone.input.include = Some(include.split(",").map(|s| s.to_string()).collect());
+			}
+		}
+	} else if chain == "output" {
+		if action == "add" {
+			zone.output.include.get_or_insert(Vec::new()).push(include.to_string());
+		} else if action == "remove" {
+			let index = zone
+				.output
+				.include
+				.as_ref()
+				.unwrap()
+				.iter()
+				.position(|i| i == include)
+				.expect("Include not found");
+			zone.output.include.as_mut().unwrap().remove(index);
+		} else if action == "replace" {
+			if include.contains("[") {
+				let include: Vec<String> = serde_json::from_str(include).expect("Invalid JSON array");
+				zone.output.include = Some(include);
+			} else {
+				zone.output.include = Some(include.split(",").map(|s| s.to_string()).collect());
+			}
+		}
+	} else {
+		let forward = zone
+			.forward
+			.iter_mut()
+			.find(|f| f.dest == chain.to_string())
+			.expect("Forward zone not found");
+		if action == "add" {
+			forward.include.get_or_insert(Vec::new()).push(include.to_string());
+		} else if action == "remove" {
+			let index = forward
+				.include
+				.as_ref()
+				.unwrap()
+				.iter()
+				.position(|i| i == include)
+				.expect("Include not found");
+			forward.include.as_mut().unwrap().remove(index);
+		} else if action == "replace" {
+			if include.contains("[") {
+				let include: Vec<String> = serde_json::from_str(include).expect("Invalid JSON array");
+				forward.include = Some(include);
+			} else {
+				forward.include = Some(include.split(",").map(|s| s.to_string()).collect());
 			}
 		}
 	}
